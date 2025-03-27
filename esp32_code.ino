@@ -1,58 +1,55 @@
-#include <WiFi.h>
+#include "thingProperties.h"
+#include <HardwareSerial.h>
 
-const char* ssid = "Pragvansh";
-const char* password = "12345678";
-const char* server = " ";
-
-/* UART setup */
-#define RX_PIN 16
-#define TX_PIN 17
-HardwareSerial mySerial(1);
-
-/* UART buffer */
-char uart_buffer[100];
+// UART settings for STM32 communication
+HardwareSerial sensorSerial(1);  // UART1 for STM32
+#define RX_PIN 16  // UART RX pin (STM32 TX)
+#define TX_PIN 17  // UART TX pin (STM32 RX)
 
 void setup() {
+  // Initialize serial communication
   Serial.begin(115200);
-  mySerial.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
+  sensorSerial.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
 
-  /* Connect to Wi-Fi */
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to Wi-Fi...");
-  }
-  Serial.println("Wi-Fi connected");
+  // Initialize the IoT Cloud connection
+  initProperties();
+  ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+
+  // Sync the device variables with the cloud
+  setDebugMessageLevel(2);
+  ArduinoCloud.printDebugInfo();
 }
 
 void loop() {
-  if (mySerial.available()) {
-    /* Read data from STM32 over UART */
-    int len = mySerial.readBytesUntil('\n', uart_buffer, sizeof(uart_buffer) - 1);
-    uart_buffer[len] = '\0'; // Null-terminate the string
+  // Update Arduino IoT Cloud connection
+  ArduinoCloud.update();
 
-    /* Print received data to Serial (for debugging) */
+  // Check if data is available from STM32 over UART
+  if (sensorSerial.available()) {
+    String sensorData = sensorSerial.readStringUntil('\n');
     Serial.print("Received data: ");
-    Serial.println(uart_buffer);
+    Serial.println(sensorData);
 
-    /* Send data to cloud server */
-    send_data_to_server(uart_buffer);
+    // Assuming sensorData is in format: "Temperature: 23.5, Humidity: 55.0"
+    // Parse the received data for temperature and humidity
+    int tempIndex = sensorData.indexOf("Temperature: ");
+    int humIndex = sensorData.indexOf("Humidity: ");
+    
+    if (tempIndex != -1 && humIndex != -1) {
+      String tempStr = sensorData.substring(tempIndex + 12, sensorData.indexOf(",", tempIndex));
+      String humStr = sensorData.substring(humIndex + 10);
+      
+      // Convert string to float
+      temperature = tempStr.toFloat();
+      humidity = humStr.toFloat();
+      
+      // Print parsed data to serial monitor
+      Serial.print("Temperature: ");
+      Serial.println(temperature);
+      Serial.print("Humidity: ");
+      Serial.println(humidity);
+    }
   }
-  delay(1000);
-}
 
-/* Send sensor data to cloud server */
-void send_data_to_server(const char* data) {
-  WiFiClient client;
-
-  if (client.connect(server, 80)) {
-    client.println("POST /api/data HTTP/1.1");
-    client.println("Host: your-server.com");
-    client.println("Content-Type: application/x-www-form-urlencoded");
-    client.print("Content-Length: ");
-    client.println(strlen(data));
-    client.println();
-    client.println(data);
-    client.stop();
-  }
+  delay(2000);  // Adjust the data update frequency
 }
