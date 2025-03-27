@@ -2,7 +2,7 @@
 
 const char* ssid = "Pragvansh";
 const char* password = "12345678";
-const char* server = "http://your-server.com/api/data";
+const char* server = " ";
 
 /* UART setup */
 #define RX_PIN 16
